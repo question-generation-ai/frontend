@@ -11,7 +11,7 @@ function App() {
   const [chapter, setChapter] = useState('Algebra');
   const [difficulty, setDifficulty] = useState('medium');
   const [type, setType] = useState('multiple-choice');
-  const [count, setCount] = useState(1);
+  const [count, setCount] = useState(10);
   const [message, setMessage] = useState('');
 
   const handleRegister = async () => {
@@ -66,36 +66,143 @@ function App() {
   };
 
   return (
-    <div style={{ maxWidth: 600, margin: '2rem auto', fontFamily: 'sans-serif' }}>
-      <h2>Question Generator API Tester</h2>
-      <div style={{ marginBottom: 16 }}>
-        <input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-        <input placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
-        <button onClick={handleRegister}>Register</button>
-        <button onClick={handleLogin}>Login</button>
+    <div className="app-bg">
+      <div className="card">
+        <h2>Question Generator</h2>
+        <div className="section">
+          <input
+            className="input"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            autoComplete="username"
+          />
+          <input
+            className="input"
+            placeholder="Password"
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+          <button className="btn" onClick={handleRegister}>Register</button>
+          <button className="btn" onClick={handleLogin}>Login</button>
+        </div>
+        <div className="divider" />
+        <div className="section">
+          <select className="input" value={subject} onChange={e => setSubject(e.target.value)}>
+            <option>Mathematics</option>
+            <option>Science</option>
+            <option>English</option>
+            <option>Social Studies</option>
+          </select>
+          <input className="input" placeholder="Chapter" value={chapter} onChange={e => setChapter(e.target.value)} />
+          <select className="input" value={difficulty} onChange={e => setDifficulty(e.target.value)}>
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+          <select className="input" value={type} onChange={e => setType(e.target.value)}>
+            <option value="multiple-choice">Multiple Choice</option>
+            <option value="short-answer">Short Answer</option>
+            <option value="true-false">True/False</option>
+          </select>
+          <input
+            className="input"
+            type="number"
+            min={1}
+            max={10}
+            value={count}
+            onChange={e => setCount(Number(e.target.value))}
+            style={{ width: 80 }}
+          />
+          <button className="btn primary" onClick={handleGenerate}>Generate Questions</button>
+        </div>
+        {message && <div className="message">{message}</div>}
+        {questionResult && (
+          <pre className="result">
+            {JSON.stringify(questionResult, null, 2)}
+          </pre>
+        )}
+        <div className="footer">
+          <small>Backend API must be running at <b>http://localhost:5000</b></small>
+        </div>
       </div>
-      <div style={{ marginBottom: 16 }}>
-        <select value={subject} onChange={e => setSubject(e.target.value)}>
-          <option>Mathematics</option>
-          <option>Science</option>
-          <option>English</option>
-          <option>Social Studies</option>
-        </select>
-        <input placeholder="Chapter" value={chapter} onChange={e => setChapter(e.target.value)} />
-        <input placeholder="Difficulty" value={difficulty} onChange={e => setDifficulty(e.target.value)} />
-        <input placeholder="Type" value={type} onChange={e => setType(e.target.value)} />
-        <input type="number" min={1} max={10} value={count} onChange={e => setCount(Number(e.target.value))} />
-        <button onClick={handleGenerate}>Generate Questions</button>
-      </div>
-      {message && <div style={{ color: 'red', marginBottom: 16 }}>{message}</div>}
-      {questionResult && (
-        <pre style={{ background: '#f4f4f4', padding: 16, borderRadius: 8 }}>
-          {JSON.stringify(questionResult, null, 2)}
-        </pre>
-      )}
-      <div style={{ marginTop: 32, color: '#888' }}>
-        <small>Backend API must be running at <b>http://localhost:5000</b></small>
-      </div>
+      <style>{`
+        .app-bg {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .card {
+          background: #fff;
+          border-radius: 18px;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+          padding: 2.5rem 2rem 2rem 2rem;
+          max-width: 420px;
+          width: 100%;
+        }
+        .section {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+        }
+        .input {
+          flex: 1 1 160px;
+          padding: 0.5rem 0.75rem;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          font-size: 1rem;
+          outline: none;
+          transition: border 0.2s;
+        }
+        .input:focus {
+          border-color: #6366f1;
+        }
+        .btn {
+          padding: 0.5rem 1.1rem;
+          border: none;
+          border-radius: 6px;
+          background: #6366f1;
+          color: #fff;
+          font-weight: 500;
+          cursor: pointer;
+          margin-left: 0.25rem;
+          transition: background 0.2s;
+        }
+        .btn.primary {
+          background: #2563eb;
+        }
+        .btn:hover {
+          background: #4f46e5;
+        }
+        .divider {
+          border-top: 1px solid #e5e7eb;
+          margin: 1rem 0;
+        }
+        .message {
+          color: #dc2626;
+          margin-bottom: 1rem;
+          text-align: center;
+        }
+        .result {
+          background: #f1f5f9;
+          padding: 1rem;
+          border-radius: 8px;
+          font-size: 0.95rem;
+          margin-top: 1rem;
+          max-height: 320px;
+          overflow: auto;
+        }
+        .footer {
+          margin-top: 2rem;
+          color: #888;
+          text-align: center;
+        }
+      `}</style>
     </div>
   );
 }
