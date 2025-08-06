@@ -12,6 +12,7 @@ const Dashboard: React.FC = () => {
   const [count, setCount] = useState(5);
   const [classLevel, setClassLevel] = useState('class 11');
   const [extraCommands, setExtraCommands] = useState('');
+  const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [includeAnswers, setIncludeAnswers] = useState(false);
   const [includeExplanations, setIncludeExplanations] = useState(false);
@@ -51,7 +52,8 @@ const Dashboard: React.FC = () => {
           type, 
           count, 
           classLevel,
-          extraCommands: extraCommands.trim() || undefined
+          extraCommands: extraCommands.trim() || undefined,
+          title: title.trim() || undefined
         }),
       });
       const data = await res.json();
@@ -89,6 +91,7 @@ const Dashboard: React.FC = () => {
           count,
           classLevel,
           extraCommands: extraCommands.trim() || undefined,
+          title: title.trim() || undefined,
           includeAnswers,
           includeExplanations
         }),
@@ -127,7 +130,8 @@ const Dashboard: React.FC = () => {
           type, 
           count, 
           classLevel,
-          extraCommands: extraCommands.trim() || undefined
+          extraCommands: extraCommands.trim() || undefined,
+          title: title.trim() || undefined
         }),
       });
       const data = await res.json();
@@ -234,6 +238,16 @@ const Dashboard: React.FC = () => {
 
             <div className="form-section">
               <h3>Advanced Options</h3>
+              <div className="form-group">
+                <label>PDF Title (Optional)</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="Enter a custom title for your PDF..."
+                />
+                <small>This will appear as the main title at the top of your PDF</small>
+              </div>
               <div className="form-group">
                 <label>Extra Instructions (Optional)</label>
                 <textarea
