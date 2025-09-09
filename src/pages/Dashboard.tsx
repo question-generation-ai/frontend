@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-
-const API_BASE = 'http://localhost:5000/api/v1';
+import { apiFetch, API_BASE } from '../lib/api';
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -38,13 +37,8 @@ const Dashboard: React.FC = () => {
     setLoading(true);
     
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/questions/generate`, {
+      const res = await apiFetch(`/v1/questions/generate`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          Authorization: token ? `Bearer ${token}` : '' 
-        },
         body: JSON.stringify({ 
           subject, 
           chapter, 
@@ -56,13 +50,8 @@ const Dashboard: React.FC = () => {
           title: title.trim() || undefined
         }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setQuestionResult(data);
-        setMessage('Questions generated successfully!');
-      } else {
-        setMessage(data.error || 'Generation failed');
-      }
+      setQuestionResult(res);
+      setMessage('Questions generated successfully!');
     } catch (err) {
       setMessage('Error generating questions');
     } finally {
@@ -76,13 +65,8 @@ const Dashboard: React.FC = () => {
     setLoading(true);
     
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/questions/generate-pdf`, {
+      const res = await apiFetch(`/v1/questions/generate-pdf`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          Authorization: token ? `Bearer ${token}` : '' 
-        },
         body: JSON.stringify({ 
           subject, 
           chapter, 
@@ -96,13 +80,8 @@ const Dashboard: React.FC = () => {
           includeExplanations
         }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setPdfResult(data);
-        setMessage('PDF generated successfully!');
-      } else {
-        setMessage(data.error || 'PDF generation failed');
-      }
+      setPdfResult(res);
+      setMessage('PDF generated successfully!');
     } catch (err) {
       setMessage('Error generating PDF');
     } finally {
@@ -116,13 +95,8 @@ const Dashboard: React.FC = () => {
     setLoading(true);
     
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/questions/generate-answer-key`, {
+      const res = await apiFetch(`/v1/questions/generate-answer-key`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          Authorization: token ? `Bearer ${token}` : '' 
-        },
         body: JSON.stringify({ 
           subject, 
           chapter, 
@@ -134,13 +108,8 @@ const Dashboard: React.FC = () => {
           title: title.trim() || undefined
         }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setPdfResult(data);
-        setMessage('Answer key PDF generated successfully!');
-      } else {
-        setMessage(data.error || 'Answer key generation failed');
-      }
+      setPdfResult(res);
+      setMessage('Answer key PDF generated successfully!');
     } catch (err) {
       setMessage('Error generating answer key');
     } finally {
@@ -149,7 +118,7 @@ const Dashboard: React.FC = () => {
   };
 
   const downloadPDF = (filename: string) => {
-    window.open(`${API_BASE}/questions/download-pdf/${filename}`, '_blank');
+    window.open(`${API_BASE}/v1/questions/download-pdf/${filename}`, '_blank');
   };
 
   return (

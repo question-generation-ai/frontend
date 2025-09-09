@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { API_BASE } from '../lib/api';
 
 interface User {
   id: string;
@@ -52,7 +53,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch('http://localhost:5000/api/v1/auth/login', {
+      const response = await fetch(`${API_BASE}/v1/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -78,7 +79,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const register = async (email: string, password: string, name?: string) => {
     try {
-      const response = await fetch('http://localhost:5000/api/v1/auth/register', {
+      const response = await fetch(`${API_BASE}/v1/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
