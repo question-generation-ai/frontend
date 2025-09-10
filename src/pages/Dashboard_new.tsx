@@ -21,19 +21,18 @@ const Dashboard: React.FC = () => {
   const [questionResult, setQuestionResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  // Predefined subjects and class levels
-  const subjects = [
-    'Mathematics', 'Physics', 'Chemistry', 'Biology', 
-    'English', 'History', 'Geography', 'Politics', 
-    'Economics', 'Computer Science', 'Environmental Science'
-  ];
+  const subjects = ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'Computer Science', 'English'];
+  const classLevels = ['class 9', 'class 10', 'class 11', 'class 12'];
+  const chapters = {
+    Mathematics: ['Algebra', 'Geometry', 'Trigonometry', 'Calculus', 'Statistics'],
+    Physics: ['Mechanics', 'Thermodynamics', 'Electromagnetism', 'Optics', 'Modern Physics'],
+    Chemistry: ['Organic Chemistry', 'Inorganic Chemistry', 'Physical Chemistry'],
+    Biology: ['Cell Biology', 'Genetics', 'Evolution', 'Ecology', 'Human Physiology'],
+    'Computer Science': ['Programming', 'Data Structures', 'Algorithms', 'Database', 'Networks'],
+    English: ['Grammar', 'Literature', 'Composition', 'Reading Comprehension']
+  };
 
-  const classLevels = [
-    'class 1', 'class 2', 'class 3', 'class 4', 'class 5', 'class 6', 
-    'class 7', 'class 8', 'class 9', 'class 10', 'class 11', 'class 12'
-  ];
-
-  const handleGenerate = async () => {
+  const handleGenerateQuestions = async () => {
     setMessage('');
     setQuestionResult(null);
     setLoading(true);
@@ -41,12 +40,12 @@ const Dashboard: React.FC = () => {
     try {
       const res = await apiFetch(`/v1/questions/generate`, {
         method: 'POST',
-        body: JSON.stringify({ 
-          subject, 
-          chapter, 
-          difficulty, 
-          type, 
-          count, 
+        body: JSON.stringify({
+          subject,
+          chapter,
+          difficulty,
+          type,
+          count,
           classLevel,
           extraCommands: extraCommands.trim() || undefined,
           title: title.trim() || undefined
@@ -61,7 +60,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleGeneratePDF = async () => {
+  const handleGenerate = async () => {
     setMessage('');
     setPdfResult(null);
     setLoading(true);
@@ -74,7 +73,7 @@ const Dashboard: React.FC = () => {
           chapter, 
           difficulty, 
           type, 
-          count,
+          count, 
           classLevel,
           extraCommands: extraCommands.trim() || undefined,
           title: title.trim() || undefined,
@@ -178,13 +177,12 @@ const Dashboard: React.FC = () => {
                 </div>
 
                 <div className="form-group">
-                  <label>Chapter/Topic</label>
-                  <input
-                    type="text"
-                    value={chapter}
-                    onChange={e => setChapter(e.target.value)}
-                    placeholder="e.g., Algebra, Mechanics, Photosynthesis"
-                  />
+                  <label>Chapter</label>
+                  <select value={chapter} onChange={e => setChapter(e.target.value)}>
+                    {(chapters[subject as keyof typeof chapters] || []).map(ch => (
+                      <option key={ch} value={ch}>{ch}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="form-group">
@@ -201,42 +199,44 @@ const Dashboard: React.FC = () => {
                   <select value={type} onChange={e => setType(e.target.value)}>
                     <option value="multiple-choice">Multiple Choice</option>
                     <option value="short-answer">Short Answer</option>
+                    <option value="essay">Essay</option>
+                    <option value="fill-in-the-blank">Fill in the Blank</option>
                     <option value="true-false">True/False</option>
                   </select>
                 </div>
 
                 <div className="form-group">
                   <label>Number of Questions</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={count}
-                    onChange={e => setCount(Number(e.target.value))}
+                  <input 
+                    type="number" 
+                    value={count} 
+                    onChange={e => setCount(parseInt(e.target.value))}
+                    min="1"
+                    max="50"
                   />
                 </div>
               </div>
             </div>
 
             <div className="form-section">
-              <h3>Advanced Options</h3>
+              <h3>Customization</h3>
               <div className="form-group">
-                <label>PDF Title (Optional)</label>
-                <input
-                  type="text"
-                  value={title}
+                <label>Title (Optional)</label>
+                <input 
+                  type="text" 
+                  value={title} 
                   onChange={e => setTitle(e.target.value)}
-                  placeholder="Enter a custom title for your PDF..."
+                  placeholder="e.g., Midterm Exam - Algebra"
                 />
-                <small>This will appear as the main title at the top of your PDF</small>
               </div>
+              
               <div className="form-group">
-                <label>Extra Instructions (Optional)</label>
-                <textarea
-                  value={extraCommands}
+                <label>Additional Instructions (Optional)</label>
+                <textarea 
+                  value={extraCommands} 
                   onChange={e => setExtraCommands(e.target.value)}
-                  placeholder="Add specific instructions, focus areas, or special requirements..."
-                  rows={3}
+                  placeholder="Any specific requirements or focus areas..."
+                  rows={4}
                 />
                 <small>Examples: "Focus on real-world applications", "Include diagrams", "Use specific formulas"</small>
               </div>
@@ -271,13 +271,6 @@ const Dashboard: React.FC = () => {
                 disabled={loading}
               >
                 {loading ? 'Generating...' : 'Generate Questions'}
-              </button>
-              <button 
-                className="btn secondary" 
-                onClick={handleGeneratePDF}
-                disabled={loading}
-              >
-                Generate PDF
               </button>
               <button 
                 className="btn secondary" 
@@ -667,11 +660,15 @@ const Dashboard: React.FC = () => {
         .pdf-result h3 {
           margin: 0 0 0.5rem 0;
           color: #0c4a6e;
+          position: relative;
+          z-index: 1;
         }
 
         .pdf-result p {
           margin: 0 0 1rem 0;
           color: #0369a1;
+          position: relative;
+          z-index: 1;
         }
 
         .question-result {
@@ -712,10 +709,18 @@ const Dashboard: React.FC = () => {
           .nav-container {
             padding: 0 1rem;
           }
+
+          .dashboard-header h1 {
+            font-size: 2rem;
+          }
+
+          .generator-form {
+            padding: 1.5rem;
+          }
         }
       `}</style>
     </div>
   );
 };
 
-export default Dashboard; 
+export default Dashboard;
