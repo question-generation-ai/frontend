@@ -67,8 +67,13 @@ const Dashboard: React.FC = () => {
     setLoading(true);
     
     try {
-      const res = await apiFetch(`/v1/questions/generate-pdf`, {
+      // Call backend which streams PDF directly
+      const response = await fetch(`${API_BASE}/v1/questions/generate-pdf`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+        },
         body: JSON.stringify({ 
           subject, 
           chapter, 
@@ -77,15 +82,32 @@ const Dashboard: React.FC = () => {
           count,
           classLevel,
           extraCommands: extraCommands.trim() || undefined,
-          title: title.trim() || undefined,
+          customTitle: title.trim() || undefined,
           includeAnswers,
           includeExplanations
         }),
       });
-      setPdfResult(res);
-      setMessage('PDF generated successfully!');
-    } catch (err) {
-      setMessage('Error generating PDF');
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filename = contentDisposition ? (contentDisposition.split('filename=')[1] || 'questions.pdf').replace(/\"/g, '') : `questions_${Date.now()}.pdf`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setMessage('PDF downloaded successfully!');
+    } catch (err: any) {
+      console.error('PDF download error:', err);
+      setMessage(`Error generating PDF: ${err.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -97,8 +119,12 @@ const Dashboard: React.FC = () => {
     setLoading(true);
     
     try {
-      const res = await apiFetch(`/v1/questions/generate-answer-key`, {
+      const response = await fetch(`${API_BASE}/v1/questions/generate-answer-key`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+        },
         body: JSON.stringify({ 
           subject, 
           chapter, 
@@ -107,13 +133,30 @@ const Dashboard: React.FC = () => {
           count, 
           classLevel,
           extraCommands: extraCommands.trim() || undefined,
-          title: title.trim() || undefined
+          customTitle: title.trim() || undefined
         }),
       });
-      setPdfResult(res);
-      setMessage('Answer key PDF generated successfully!');
-    } catch (err) {
-      setMessage('Error generating answer key');
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const cd = response.headers.get('Content-Disposition');
+      const fn = cd ? (cd.split('filename=')[1] || 'answer_key.pdf').replace(/\"/g, '') : `answer_key_${Date.now()}.pdf`;
+      link.download = fn;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setMessage('Answer Key PDF downloaded successfully!');
+    } catch (err: any) {
+      console.error('Answer Key download error:', err);
+      setMessage(`Error generating answer key: ${err.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -277,7 +320,7 @@ const Dashboard: React.FC = () => {
                 onClick={handleGeneratePDF}
                 disabled={loading}
               >
-                Generate PDF
+                Generate & Download PDF
               </button>
               <button 
                 className="btn secondary" 
