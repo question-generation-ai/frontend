@@ -118,8 +118,28 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const downloadPDF = (filename: string) => {
-    window.open(`${API_BASE}/v1/questions/download-pdf/${filename}`, '_blank');
+  const downloadPDF = async (filename: string) => {
+    try {
+      console.log(`[Frontend] Attempting to download: ${filename}`);
+      console.log(`[Frontend] Download URL: ${API_BASE}/v1/questions/download-pdf/${filename}`);
+      
+      // Create a direct download link
+      const downloadUrl = `${API_BASE}/v1/questions/download-pdf/${filename}`;
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      link.target = '_blank';
+      
+      // Add to DOM temporarily and click
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log(`[Frontend] Download initiated for: ${filename}`);
+    } catch (error) {
+      console.error(`[Frontend] Download error:`, error);
+      alert('Failed to download PDF. Please try again.');
+    }
   };
 
   const handleLogout = async () => {
@@ -598,6 +618,10 @@ const Dashboard: React.FC = () => {
           background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
           color: white;
           box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+          cursor: pointer;
+          pointer-events: auto;
+          z-index: 10;
+          position: relative;
         }
 
         .btn:hover:not(:disabled) {
