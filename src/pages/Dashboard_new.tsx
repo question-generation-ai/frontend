@@ -60,44 +60,80 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleGenerate = async () => {
+  const generatePDF = async () => {
     setMessage('');
-    setPdfResult(null);
     setLoading(true);
-    
     try {
-      const res = await apiFetch(`/v1/questions/generate-pdf`, {
+      console.log(`[Frontend] Generating PDF with direct download`);
+      
+      const response = await fetch(`${API_BASE}/v1/questions/generate-pdf`, {
         method: 'POST',
-        body: JSON.stringify({ 
-          subject, 
-          chapter, 
-          difficulty, 
-          type, 
-          count, 
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          subject,
+          chapter,
+          difficulty,
+          type,
+          count,
           classLevel,
           extraCommands: extraCommands.trim() || undefined,
-          title: title.trim() || undefined,
+          customTitle: title.trim() || undefined,
           includeAnswers,
           includeExplanations
         }),
       });
-      setPdfResult(res);
-      setMessage('PDF generated successfully!');
-    } catch (err) {
-      setMessage('Error generating PDF');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Get the PDF blob
+      const blob = await response.blob();
+      console.log(`[Frontend] PDF blob received - Size: ${blob.size} bytes`);
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filename = contentDisposition 
+        ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') 
+        : `questions_${Date.now()}.pdf`;
+      
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setMessage('PDF downloaded successfully!');
+      console.log(`[Frontend] PDF download completed: ${filename}`);
+    } catch (err: any) {
+      console.error(`[Frontend] PDF generation error:`, err);
+      setMessage(`Error generating PDF: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGenerateAnswerKey = async () => {
+  const generateAnswerKeyPDF = async () => {
     setMessage('');
-    setPdfResult(null);
     setLoading(true);
     
     try {
-      const res = await apiFetch(`/v1/questions/generate-answer-key`, {
+      console.log(`[Frontend] Generating Answer Key PDF with direct download`);
+      
+      const response = await fetch(`${API_BASE}/v1/questions/generate-answer-key`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({ 
           subject, 
           chapter, 
@@ -106,13 +142,40 @@ const Dashboard: React.FC = () => {
           count, 
           classLevel,
           extraCommands: extraCommands.trim() || undefined,
-          title: title.trim() || undefined
+          customTitle: title.trim() || undefined
         }),
       });
-      setPdfResult(res);
-      setMessage('Answer key PDF generated successfully!');
-    } catch (err) {
-      setMessage('Error generating answer key');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Get the PDF blob
+      const blob = await response.blob();
+      console.log(`[Frontend] Answer Key PDF blob received - Size: ${blob.size} bytes`);
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filename = contentDisposition 
+        ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') 
+        : `answer_key_${Date.now()}.pdf`;
+      
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setMessage('Answer Key PDF downloaded successfully!');
+      console.log(`[Frontend] Answer Key PDF download completed: ${filename}`);
+    } catch (err: any) {
+      console.error(`[Frontend] Answer Key PDF generation error:`, err);
+      setMessage(`Error generating answer key: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -287,17 +350,17 @@ const Dashboard: React.FC = () => {
             <div className="action-buttons">
               <button 
                 className="btn primary" 
-                onClick={handleGenerate}
+                onClick={generatePDF}
                 disabled={loading}
               >
-                {loading ? 'Generating...' : 'Generate Questions'}
+                {loading ? 'Generating...' : 'Generate & Download PDF'}
               </button>
               <button 
                 className="btn secondary" 
-                onClick={handleGenerateAnswerKey}
+                onClick={generateAnswerKeyPDF}
                 disabled={loading}
               >
-                Generate Answer Key
+                Generate & Download Answer Key
               </button>
             </div>
           </div>
