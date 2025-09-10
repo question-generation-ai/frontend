@@ -97,7 +97,7 @@ const Dashboard: React.FC = () => {
       const link = document.createElement('a');
       link.href = url;
       const contentDisposition = response.headers.get('Content-Disposition');
-      const filename = contentDisposition ? (contentDisposition.split('filename=')[1] || 'questions.pdf').replace(/\"/g, '') : `questions_${Date.now()}.pdf`;
+      const filename = contentDisposition ? (contentDisposition.split('filename=')[1] || 'questions.pdf').replace(/"/g, '') : `questions_${Date.now()}.pdf`;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
@@ -146,7 +146,7 @@ const Dashboard: React.FC = () => {
       const link = document.createElement('a');
       link.href = url;
       const cd = response.headers.get('Content-Disposition');
-      const fn = cd ? (cd.split('filename=')[1] || 'answer_key.pdf').replace(/\"/g, '') : `answer_key_${Date.now()}.pdf`;
+      const fn = cd ? (cd.split('filename=')[1] || 'answer_key.pdf').replace(/"/g, '') : `answer_key_${Date.now()}.pdf`;
       link.download = fn;
       document.body.appendChild(link);
       link.click();
