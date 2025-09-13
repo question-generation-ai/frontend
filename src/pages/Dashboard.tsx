@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch, API_BASE } from '../lib/api';
+import LoaderOverlay from '../components/LoaderOverlay';
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -15,27 +16,30 @@ const Dashboard: React.FC = () => {
   const [extraCommands, setExtraCommands] = useState('');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
+  const [provider, setProvider] = useState<'gemini' | 'openai'>('gemini');
   const [includeAnswers, setIncludeAnswers] = useState(false);
   const [includeExplanations, setIncludeExplanations] = useState(false);
   const [pdfResult, setPdfResult] = useState<any>(null);
   const [questionResult, setQuestionResult] = useState<any>(null);
+  const [abResult, setAbResult] = useState<any>(null);
+  const [abChoice, setAbChoice] = useState<'gemini' | 'openai' | ''>('');
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>('Processing...');
 
   // Predefined subjects and class levels
   const subjects = [
     'Mathematics', 'Physics', 'Chemistry', 'Biology', 
     'English', 'History', 'Geography', 'Politics', 
-    'Economics', 'Computer Science', 'Environmental Science'
   ];
 
   const classLevels = [
-    'class 1', 'class 2', 'class 3', 'class 4', 'class 5', 'class 6', 
-    'class 7', 'class 8', 'class 9', 'class 10', 'class 11', 'class 12'
+     'class 9', 'class 10', 'class 11', 'class 12'
   ];
 
   const handleGenerate = async () => {
     setMessage('');
     setQuestionResult(null);
+    setLoadingMessage('Generating questions...');
     setLoading(true);
     
     try {
@@ -49,7 +53,8 @@ const Dashboard: React.FC = () => {
           count, 
           classLevel,
           extraCommands: extraCommands.trim() || undefined,
-          title: title.trim() || undefined
+          title: title.trim() || undefined,
+          provider
         }),
       });
       setQuestionResult(res);
@@ -61,9 +66,55 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleABGenerate = async () => {
+    setMessage('');
+    setAbResult(null);
+    setAbChoice('');
+    setLoadingMessage('Running A/B test...');
+    setLoading(true);
+    try {
+      const res = await apiFetch(`/v1/questions/ab-generate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          subject,
+          chapter,
+          difficulty,
+          type,
+          count,
+          classLevel,
+          extraCommands: extraCommands.trim() || undefined,
+          title: title.trim() || undefined,
+        }),
+      });
+      setAbResult(res);
+      setMessage('A/B questions generated!');
+    } catch (err:any) {
+      setMessage(`Error generating A/B questions: ${err.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleABFeedback = async () => {
+    if (!abChoice) {
+      setMessage('Please select a version (Model A or Model B) first.');
+      return;
+    }
+    try {
+      await apiFetch(`/v1/questions/ab-feedback`, {
+        method: 'POST',
+        body: JSON.stringify({ selection: abChoice, reason: 'Tester preferred this set' }),
+      });
+      setMessage('Thanks! Your preference has been recorded.');
+    } catch (err:any) {
+      setMessage(`Error submitting feedback: ${err.message || 'Unknown error'}`);
+    }
+  };
+
   const handleGeneratePDF = async () => {
     setMessage('');
     setPdfResult(null);
+    setLoadingMessage('Generating PDF...');
     setLoading(true);
     
     try {
@@ -116,6 +167,7 @@ const Dashboard: React.FC = () => {
   const handleGenerateAnswerKey = async () => {
     setMessage('');
     setPdfResult(null);
+    setLoadingMessage('Generating answer key PDF...');
     setLoading(true);
     
     try {
@@ -245,6 +297,13 @@ const Dashboard: React.FC = () => {
                     <option value="multiple-choice">Multiple Choice</option>
                     <option value="short-answer">Short Answer</option>
                     <option value="true-false">True/False</option>
+                    <option value="long-answer">Long Answer</option>
+                    <option value="reasoning-based">Reasoning Based</option>
+                    <option value="application-based">Application Based</option>
+                    <option value="analytical">Analytical</option>
+                    <option value="fill-in-the-blank">Fill in the Blank</option>
+                    <option value="case-study">Case Study</option>
+                    <option value="problem-solving">Problem Solving</option>
                   </select>
                 </div>
 
@@ -257,6 +316,13 @@ const Dashboard: React.FC = () => {
                     value={count}
                     onChange={e => setCount(Number(e.target.value))}
                   />
+                </div>
+                <div className="form-group">
+                  <label>AI Provider</label>
+                  <select value={provider} onChange={e => setProvider(e.target.value as any)}>
+                    <option value="gemini">Model A</option>
+                    <option value="openai">Model B</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -329,6 +395,13 @@ const Dashboard: React.FC = () => {
               >
                 Generate Answer Key
               </button>
+              <button 
+                className="btn secondary" 
+                onClick={handleABGenerate}
+                disabled={loading}
+              >
+                A/B Test 
+              </button>
             </div>
           </div>
 
@@ -354,9 +427,33 @@ const Dashboard: React.FC = () => {
               <pre>{JSON.stringify(questionResult, null, 2)}</pre>
             </div>
           )}
-        </div>
-      </main>
 
+          {abResult && (
+            <div className="question-result">
+              <h3>A/B Test Results</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <h4>Model A</h4>
+                  <pre>{JSON.stringify(abResult.gemini, null, 2)}</pre>
+                  <label>
+                    <input type="radio" name="abChoice" value="gemini" checked={abChoice==='gemini'} onChange={() => setAbChoice('gemini')} /> Prefer Model A
+                  </label>
+                </div>
+                <div>
+                  <h4>Model B</h4>
+                  <pre>{JSON.stringify(abResult.openai, null, 2)}</pre>
+                  <label>
+                    <input type="radio" name="abChoice" value="openai" checked={abChoice==='openai'} onChange={() => setAbChoice('openai')} /> Prefer Model B
+                  </label>
+                </div>
+              </div>
+              <div style={{ marginTop: '1rem' }}>
+                <button className="btn primary" onClick={handleABFeedback}>Submit Preference</button>
+              </div>
+            </div>
+          )}
+          </div>
+        </main>
       <style>{`
         .dashboard {
           min-height: 100vh;
@@ -371,7 +468,7 @@ const Dashboard: React.FC = () => {
           left: 0;
           right: 0;
           bottom: 0;
-          background: 
+          background:
             radial-gradient(circle at 20% 80%, rgba(120, 200, 255, 0.1) 0%, transparent 50%),
             radial-gradient(circle at 80% 20%, rgba(255, 120, 200, 0.1) 0%, transparent 50%),
             radial-gradient(circle at 40% 40%, rgba(120, 255, 120, 0.1) 0%, transparent 50%);
@@ -487,7 +584,7 @@ const Dashboard: React.FC = () => {
           background: rgba(255, 255, 255, 0.95);
           backdrop-filter: blur(20px);
           border-radius: 20px;
-          box-shadow: 
+          box-shadow:
             0 8px 32px rgba(0, 0, 0, 0.1),
             inset 0 1px 0 rgba(255, 255, 255, 0.5);
           padding: 2.5rem;
@@ -568,7 +665,7 @@ const Dashboard: React.FC = () => {
           outline: none;
           border-color: #667eea;
           background: rgba(255, 255, 255, 0.95);
-          box-shadow: 
+          box-shadow:
             0 0 0 3px rgba(102, 126, 234, 0.1),
             0 4px 12px rgba(0, 0, 0, 0.1);
           transform: translateY(-1px);
@@ -594,7 +691,7 @@ const Dashboard: React.FC = () => {
           cursor: pointer;
         }
 
-        .checkbox-label input[type="checkbox"] {
+        .checkbox-label input[type='checkbox'] {
           margin: 0;
         }
 
@@ -757,8 +854,9 @@ const Dashboard: React.FC = () => {
           }
         }
       `}</style>
+      <LoaderOverlay show={loading} message={loadingMessage} />
     </div>
   );
 };
 
-export default Dashboard; 
+export default Dashboard;

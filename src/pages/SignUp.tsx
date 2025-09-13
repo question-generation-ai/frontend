@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import LoaderOverlay from '../components/LoaderOverlay';
 
 const SignUp: React.FC = () => {
   const [name, setName] = useState('');
@@ -247,8 +248,9 @@ const SignUp: React.FC = () => {
           }
         }
       `}</style>
+      <LoaderOverlay show={loading} message="Creating your account..." />
     </div>
   );
 };
 
-export default SignUp; 
+export default SignUp;

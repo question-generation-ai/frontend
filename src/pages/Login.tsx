@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import LoaderOverlay from '../components/LoaderOverlay';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -210,8 +211,9 @@ const Login: React.FC = () => {
           }
         }
       `}</style>
+      <LoaderOverlay show={loading} message="Signing you in..." />
     </div>
   );
 };
 
-export default Login; 
+export default Login;
