@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch, API_BASE } from '../lib/api';
 import LoaderOverlay from '../components/LoaderOverlay';
+import MixedQuestionGenerator from '../components/MixedQuestionGenerator';
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -25,6 +26,7 @@ const Dashboard: React.FC = () => {
   const [abChoice, setAbChoice] = useState<'gemini' | 'openai' | ''>('');
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('Processing...');
+  const [activeTab, setActiveTab] = useState<'single' | 'mixed'>('single');
 
   // Predefined subjects and class levels
   const subjects = [
@@ -250,10 +252,27 @@ const Dashboard: React.FC = () => {
             <p>Create professional educational questions with AI assistance</p>
           </div>
 
+          <div className="tab-navigation">
+            <button 
+              className={`tab-btn ${activeTab === 'single' ? 'active' : ''}`}
+              onClick={() => setActiveTab('single')}
+            >
+              Single Question Type
+            </button>
+            <button 
+              className={`tab-btn ${activeTab === 'mixed' ? 'active' : ''}`}
+              onClick={() => setActiveTab('mixed')}
+            >
+              Mixed Question Types
+            </button>
+          </div>
+
           <div className="generator-form">
-            <div className="form-section">
-              <h3>Basic Settings</h3>
-              <div className="form-grid">
+            {activeTab === 'single' && (
+              <>
+                <div className="form-section">
+                  <h3>Basic Settings</h3>
+                  <div className="form-grid">
                 <div className="form-group">
                   <label>Subject</label>
                   <select value={subject} onChange={e => setSubject(e.target.value)}>
@@ -373,36 +392,132 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="action-buttons">
-              <button 
-                className="btn primary" 
-                onClick={handleGenerate}
-                disabled={loading}
-              >
-                {loading ? 'Generating...' : 'Generate Questions'}
-              </button>
-              <button 
-                className="btn secondary" 
-                onClick={handleGeneratePDF}
-                disabled={loading}
-              >
-                Generate & Download PDF
-              </button>
-              <button 
-                className="btn secondary" 
-                onClick={handleGenerateAnswerKey}
-                disabled={loading}
-              >
-                Generate Answer Key
-              </button>
-              <button 
-                className="btn secondary" 
-                onClick={handleABGenerate}
-                disabled={loading}
-              >
-                A/B Test 
-              </button>
-            </div>
+                <div className="action-buttons">
+                  <button 
+                    className="btn primary" 
+                    onClick={handleGenerate}
+                    disabled={loading}
+                  >
+                    {loading ? 'Generating...' : 'Generate Questions'}
+                  </button>
+                  <button 
+                    className="btn secondary" 
+                    onClick={handleGeneratePDF}
+                    disabled={loading}
+                  >
+                    Generate & Download PDF
+                  </button>
+                  <button 
+                    className="btn secondary" 
+                    onClick={handleGenerateAnswerKey}
+                    disabled={loading}
+                  >
+                    Generate Answer Key
+                  </button>
+                  <button 
+                    className="btn secondary" 
+                    onClick={handleABGenerate}
+                    disabled={loading}
+                  >
+                    A/B Test 
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeTab === 'mixed' && (
+              <>
+                <div className="form-section">
+                  <h3>Basic Settings</h3>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Subject</label>
+                      <select value={subject} onChange={e => setSubject(e.target.value)}>
+                        {subjects.map(sub => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Class Level</label>
+                      <select value={classLevel} onChange={e => setClassLevel(e.target.value)}>
+                        {classLevels.map(level => (
+                          <option key={level} value={level}>{level}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Chapter/Topic</label>
+                      <input
+                        type="text"
+                        value={chapter}
+                        onChange={e => setChapter(e.target.value)}
+                        placeholder="e.g., Algebra, Mechanics, Photosynthesis"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Difficulty</label>
+                      <select value={difficulty} onChange={e => setDifficulty(e.target.value)}>
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label>AI Provider</label>
+                      <select value={provider} onChange={e => setProvider(e.target.value as any)}>
+                        <option value="gemini">Model A</option>
+                        <option value="openai">Model B</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-section">
+                  <h3>Advanced Options</h3>
+                  <div className="form-group">
+                    <label>PDF Title (Optional)</label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={e => setTitle(e.target.value)}
+                      placeholder="Enter a custom title for your PDF..."
+                    />
+                    <small>This will appear as the main title at the top of your PDF</small>
+                  </div>
+                  <div className="form-group">
+                    <label>Extra Instructions (Optional)</label>
+                    <textarea
+                      value={extraCommands}
+                      onChange={e => setExtraCommands(e.target.value)}
+                      placeholder="Add specific instructions, focus areas, or special requirements..."
+                      rows={3}
+                    />
+                    <small>Examples: "Focus on real-world applications", "Include diagrams", "Use specific formulas"</small>
+                  </div>
+                </div>
+
+                <MixedQuestionGenerator
+                  subject={subject}
+                  chapter={chapter}
+                  difficulty={difficulty}
+                  classLevel={classLevel}
+                  extraCommands={extraCommands}
+                  title={title}
+                  provider={provider}
+                  onResult={setQuestionResult}
+                  onMessage={setMessage}
+                  onLoading={(loading, message) => {
+                    setLoading(loading);
+                    if (message) setLoadingMessage(message);
+                  }}
+                />
+              </>
+            )}
           </div>
 
           {message && (
@@ -578,6 +693,58 @@ const Dashboard: React.FC = () => {
           color: rgba(255, 255, 255, 0.9);
           font-size: 1.2rem;
           font-weight: 400;
+        }
+
+        .tab-navigation {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 2rem;
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(20px);
+          border-radius: 12px;
+          padding: 0.5rem;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .tab-btn {
+          flex: 1;
+          padding: 1rem 2rem;
+          border: none;
+          background: transparent;
+          color: rgba(255, 255, 255, 0.7);
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 1rem;
+          font-weight: 600;
+          transition: all 0.3s ease;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .tab-btn:hover {
+          color: rgba(255, 255, 255, 0.9);
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .tab-btn.active {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .tab-btn.active::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+          transition: left 0.5s;
+        }
+
+        .tab-btn.active:hover::before {
+          left: 100%;
         }
 
         .generator-form {
