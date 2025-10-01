@@ -30,7 +30,6 @@ const Dashboard: React.FC = () => {
   const [provider, setProvider] = useState<'gemini' | 'openai'>('gemini');
   const [includeAnswers, setIncludeAnswers] = useState(false);
   const [includeExplanations, setIncludeExplanations] = useState(false);
-  const [pdfResult, setPdfResult] = useState<any>(null);
   const [questionResult, setQuestionResult] = useState<QuestionResult | null>(null);
   const [abResult, setAbResult] = useState<ABResult | null>(null);
   const [abChoice, setAbChoice] = useState<'gemini' | 'openai' | ''>('');
@@ -320,9 +319,10 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const downloadPDF = useCallback((filename: string) => {
-    window.open(`${API_BASE}/v1/questions/download-pdf/${filename}`, '_blank');
-  }, []);
+  // Legacy download function - no longer needed with direct streaming
+  // const downloadPDF = useCallback((filename: string) => {
+  //   window.open(`${API_BASE}/v1/questions/download-pdf/${filename}`, '_blank');
+  // }, []);
 
   const handleLogout = async () => {
     try {
@@ -334,10 +334,6 @@ const Dashboard: React.FC = () => {
       navigate('/');
     }
   };
-
-  // Suppress unused variable warning with comment
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _unusedPdfResult = pdfResult;
 
   return (
     <div className="dashboard">
