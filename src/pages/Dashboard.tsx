@@ -1,9 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch, API_BASE } from '../lib/api';
 import LoaderOverlay from '../components/LoaderOverlay';
 import MixedQuestionGenerator from '../components/MixedQuestionGenerator';
+
+interface QuestionResult {
+  questions: any[];
+  [key: string]: any;
+}
+
+interface ABResult {
+  gemini: QuestionResult;
+  openai: QuestionResult;
+}
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -21,22 +31,54 @@ const Dashboard: React.FC = () => {
   const [includeAnswers, setIncludeAnswers] = useState(false);
   const [includeExplanations, setIncludeExplanations] = useState(false);
   const [pdfResult, setPdfResult] = useState<any>(null);
-  const [questionResult, setQuestionResult] = useState<any>(null);
-  const [abResult, setAbResult] = useState<any>(null);
+  const [questionResult, setQuestionResult] = useState<QuestionResult | null>(null);
+  const [abResult, setAbResult] = useState<ABResult | null>(null);
   const [abChoice, setAbChoice] = useState<'gemini' | 'openai' | ''>('');
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('Processing...');
   const [activeTab, setActiveTab] = useState<'single' | 'mixed'>('single');
-
-  // Predefined subjects and class levels
-  const subjects = [
-    'Mathematics', 'Physics', 'Chemistry', 'Biology', 
-    'English', 'History', 'Geography', 'Politics', 
-  ];
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [topics, setTopics] = useState<any[]>([]);
 
   const classLevels = [
-     'class 9', 'class 10', 'class 11', 'class 12'
+    'class 9', 'class 10', 'class 11', 'class 12'
   ];
+
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      if (classLevel) {
+        try {
+          const res = await apiFetch(`/v1/syllabus/${classLevel}/subjects`);
+          setSubjects(res || []);
+          if (res && res.length > 0) {
+            setSubject(res[0]);
+          }
+        } catch (error) {
+          console.error('Failed to fetch subjects', error);
+          setSubjects([]);
+        }
+      }
+    };
+    fetchSubjects();
+  }, [classLevel]);
+
+  useEffect(() => {
+    const fetchTopics = async () => {
+      if (classLevel && subject) {
+        try {
+          const res = await apiFetch(`/v1/syllabus/${classLevel}/${subject}/topics`);
+          setTopics(res || []);
+          if (res && res.length > 0) {
+            setChapter(res[0].chapter);
+          }
+        } catch (error) {
+          console.error('Failed to fetch topics', error);
+          setTopics([]);
+        }
+      }
+    };
+    fetchTopics();
+  }, [classLevel, subject]);
 
   const handleGenerate = async () => {
     setMessage('');
@@ -48,15 +90,16 @@ const Dashboard: React.FC = () => {
       const res = await apiFetch(`/v1/questions/generate`, {
         method: 'POST',
         body: JSON.stringify({ 
-          subject, 
-          chapter, 
-          difficulty, 
-          type, 
-          count, 
+          subject,
+          chapter,
+          difficulty,
+          type,
+          count,
           classLevel,
           extraCommands: extraCommands.trim() || undefined,
           title: title.trim() || undefined,
-          provider
+          provider,
+          syllabus: topics.find(t => t.chapter === chapter)
         }),
       });
       setQuestionResult(res);
@@ -90,7 +133,7 @@ const Dashboard: React.FC = () => {
       });
       setAbResult(res);
       setMessage('A/B questions generated!');
-    } catch (err:any) {
+    } catch (err: any) {
       setMessage(`Error generating A/B questions: ${err.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
@@ -102,39 +145,99 @@ const Dashboard: React.FC = () => {
       setMessage('Please select a version (Model A or Model B) first.');
       return;
     }
+    if (!abResult) return;
+
     try {
       await apiFetch(`/v1/questions/ab-feedback`, {
         method: 'POST',
         body: JSON.stringify({ selection: abChoice, reason: 'Tester preferred this set' }),
       });
       setMessage('Thanks! Your preference has been recorded.');
-    } catch (err:any) {
+      
+      // Set the selected questions as the main result for PDF downloads
+      const selectedQuestions = abChoice === 'gemini' ? abResult.gemini : abResult.openai;
+      setQuestionResult(selectedQuestions);
+    } catch (err: any) {
       setMessage(`Error submitting feedback: ${err.message || 'Unknown error'}`);
     }
   };
 
-  const handleGeneratePDF = async () => {
+  const handleDownloadABPDF = async (version: 'gemini' | 'openai') => {
+    if (!abResult || !abResult[version] || !abResult[version].questions) {
+      setMessage('No questions available for PDF generation');
+      return;
+    }
+
     setMessage('');
-    setPdfResult(null);
-    setLoadingMessage('Generating PDF...');
+    setLoadingMessage(`Creating PDF from ${version === 'gemini' ? 'Model A' : 'Model B'} questions...`);
     setLoading(true);
     
     try {
-      // Call backend which streams PDF directly
-      const response = await fetch(`${API_BASE}/v1/questions/generate-pdf`, {
+      const response = await fetch(`${API_BASE}/v1/questions/create-pdf`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
         },
         body: JSON.stringify({ 
+          questions: abResult[version].questions,
           subject, 
           chapter, 
-          difficulty, 
-          type, 
-          count,
-          classLevel,
-          extraCommands: extraCommands.trim() || undefined,
+          difficulty,
+          customTitle: `${title.trim() || `${subject} - ${chapter}`} (${version === 'gemini' ? 'Model A' : 'Model B'})`,
+          includeAnswers,
+          includeExplanations
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filename = contentDisposition ? (contentDisposition.split('filename=')[1] || 'ab_test.pdf').replace(/"/g, '') : `ab_test_${version}_${Date.now()}.pdf`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setMessage(`${version === 'gemini' ? 'Model A' : 'Model B'} PDF downloaded successfully!`);
+    } catch (err: any) {
+      console.error('A/B PDF download error:', err);
+      setMessage(`Error creating ${version === 'gemini' ? 'Model A' : 'Model B'} PDF: ${err.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!questionResult || !questionResult.questions || questionResult.questions.length === 0) {
+      setMessage('Please generate questions first before downloading PDF');
+      return;
+    }
+
+    setMessage('');
+    setLoadingMessage('Creating PDF from generated questions...');
+    setLoading(true);
+    
+    try {
+      // Send the already generated questions to create PDF
+      const response = await fetch(`${API_BASE}/v1/questions/create-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+        },
+        body: JSON.stringify({ 
+          questions: questionResult.questions,
+          subject, 
+          chapter, 
+          difficulty,
           customTitle: title.trim() || undefined,
           includeAnswers,
           includeExplanations
@@ -160,33 +263,34 @@ const Dashboard: React.FC = () => {
       setMessage('PDF downloaded successfully!');
     } catch (err: any) {
       console.error('PDF download error:', err);
-      setMessage(`Error generating PDF: ${err.message || 'Unknown error'}`);
+      setMessage(`Error creating PDF: ${err.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   };
 
   const handleGenerateAnswerKey = async () => {
+    if (!questionResult || !questionResult.questions || questionResult.questions.length === 0) {
+      setMessage('Please generate questions first before creating answer key');
+      return;
+    }
+
     setMessage('');
-    setPdfResult(null);
-    setLoadingMessage('Generating answer key PDF...');
+    setLoadingMessage('Creating answer key PDF...');
     setLoading(true);
     
     try {
-      const response = await fetch(`${API_BASE}/v1/questions/generate-answer-key`, {
+      const response = await fetch(`${API_BASE}/v1/questions/create-answer-key`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
         },
         body: JSON.stringify({ 
+          questions: questionResult.questions,
           subject, 
           chapter, 
-          difficulty, 
-          type, 
-          count, 
-          classLevel,
-          extraCommands: extraCommands.trim() || undefined,
+          difficulty,
           customTitle: title.trim() || undefined
         }),
       });
@@ -207,18 +311,18 @@ const Dashboard: React.FC = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      setMessage('Answer Key PDF downloaded successfully!');
+      setMessage('Answer key PDF downloaded successfully!');
     } catch (err: any) {
-      console.error('Answer Key download error:', err);
-      setMessage(`Error generating answer key: ${err.message || 'Unknown error'}`);
+      console.error('Answer key download error:', err);
+      setMessage(`Error creating answer key: ${err.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const downloadPDF = (filename: string) => {
+  const downloadPDF = useCallback((filename: string) => {
     window.open(`${API_BASE}/v1/questions/download-pdf/${filename}`, '_blank');
-  };
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -230,6 +334,10 @@ const Dashboard: React.FC = () => {
       navigate('/');
     }
   };
+
+  // Suppress unused variable warning with comment
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _unusedPdfResult = pdfResult;
 
   return (
     <div className="dashboard">
@@ -272,125 +380,128 @@ const Dashboard: React.FC = () => {
               <>
                 <div className="form-section">
                   <h3>Basic Settings</h3>
+
                   <div className="form-grid">
-                <div className="form-group">
-                  <label>Subject</label>
-                  <select value={subject} onChange={e => setSubject(e.target.value)}>
-                    {subjects.map(sub => (
-                      <option key={sub} value={sub}>{sub}</option>
-                    ))}
-                  </select>
+                  <div className="form-group">
+                      <label htmlFor="classLevel">Class Level</label>
+                      <select id="classLevel" value={classLevel} onChange={e => setClassLevel(e.target.value)}>
+                        {classLevels.map(level => (
+                          <option key={level} value={level}>{level}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                  
+                    <div className="form-group">
+                      <label htmlFor="subject">Subject</label>
+                      <select id="subject" value={subject} onChange={e => setSubject(e.target.value)}>
+                        {subjects.map(sub => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="chapter">Chapter/Topic</label>
+                      <select id="chapter" value={chapter} onChange={e => setChapter(e.target.value)}>
+                        {topics.map(topic => (
+                          <option key={topic.chapter} value={topic.chapter}>{topic.chapter}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="difficulty">Difficulty</label>
+                      <select id="difficulty" value={difficulty} onChange={e => setDifficulty(e.target.value)}>
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="type">Question Type</label>
+                      <select id="type" value={type} onChange={e => setType(e.target.value)}>
+                        <option value="multiple-choice">Multiple Choice</option>
+                        <option value="short-answer">Short Answer</option>
+                        <option value="true-false">True/False</option>
+                        <option value="long-answer">Long Answer</option>
+                        <option value="application-based">Application Based</option>
+                        <option value="fill-in-the-blank">Fill in the Blank</option>
+                      
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="count">Number of Questions</label>
+                      <input
+                        id="count"
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={count}
+                        onChange={e => setCount(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="provider">AI Provider</label>
+                      <select id="provider" value={provider} onChange={e => setProvider(e.target.value as 'gemini' | 'openai')}>
+                        <option value="gemini">Model A</option>
+                        <option value="openai">Model B</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="form-group">
-                  <label>Class Level</label>
-                  <select value={classLevel} onChange={e => setClassLevel(e.target.value)}>
-                    {classLevels.map(level => (
-                      <option key={level} value={level}>{level}</option>
-                    ))}
-                  </select>
+                <div className="form-section">
+                  <h3>Advanced Options</h3>
+                  <div className="form-group">
+                    <label htmlFor="title">PDF Title (Optional)</label>
+                    <input
+                      id="title"
+                      type="text"
+                      value={title}
+                      onChange={e => setTitle(e.target.value)}
+                      placeholder="Enter a custom title for your PDF..."
+                    />
+                    <small>This will appear as the main title at the top of your PDF</small>
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="extraCommands">Extra Instructions (Optional)</label>
+                    <textarea
+                      id="extraCommands"
+                      value={extraCommands}
+                      onChange={e => setExtraCommands(e.target.value)}
+                      placeholder="Add specific instructions, focus areas, or special requirements..."
+                      rows={3}
+                    />
+                    <small>Examples: &quot;Focus on real-world applications&quot;, &quot;Include diagrams&quot;, &quot;Use specific formulas&quot;</small>
+                  </div>
                 </div>
 
-                <div className="form-group">
-                  <label>Chapter/Topic</label>
-                  <input
-                    type="text"
-                    value={chapter}
-                    onChange={e => setChapter(e.target.value)}
-                    placeholder="e.g., Algebra, Mechanics, Photosynthesis"
-                  />
+                <div className="form-section">
+                  <h3>PDF Options</h3>
+                  <div className="checkbox-group">
+                    <label className="checkbox-label" htmlFor="includeAnswers">
+                      <input 
+                        id="includeAnswers"
+                        type="checkbox" 
+                        checked={includeAnswers} 
+                        onChange={e => setIncludeAnswers(e.target.checked)}
+                      />
+                      Include Answers in PDF
+                    </label>
+                    <label className="checkbox-label" htmlFor="includeExplanations">
+                      <input 
+                        id="includeExplanations"
+                        type="checkbox" 
+                        checked={includeExplanations} 
+                        onChange={e => setIncludeExplanations(e.target.checked)}
+                      />
+                      Include Explanations in PDF
+                    </label>
+                  </div>
                 </div>
-
-                <div className="form-group">
-                  <label>Difficulty</label>
-                  <select value={difficulty} onChange={e => setDifficulty(e.target.value)}>
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Question Type</label>
-                  <select value={type} onChange={e => setType(e.target.value)}>
-                    <option value="multiple-choice">Multiple Choice</option>
-                    <option value="short-answer">Short Answer</option>
-                    <option value="true-false">True/False</option>
-                    <option value="long-answer">Long Answer</option>
-                    <option value="reasoning-based">Reasoning Based</option>
-                    <option value="application-based">Application Based</option>
-                    <option value="analytical">Analytical</option>
-                    <option value="fill-in-the-blank">Fill in the Blank</option>
-                    <option value="case-study">Case Study</option>
-                    <option value="problem-solving">Problem Solving</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Number of Questions</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={count}
-                    onChange={e => setCount(Number(e.target.value))}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>AI Provider</label>
-                  <select value={provider} onChange={e => setProvider(e.target.value as any)}>
-                    <option value="gemini">Model A</option>
-                    <option value="openai">Model B</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="form-section">
-              <h3>Advanced Options</h3>
-              <div className="form-group">
-                <label>PDF Title (Optional)</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                  placeholder="Enter a custom title for your PDF..."
-                />
-                <small>This will appear as the main title at the top of your PDF</small>
-              </div>
-              <div className="form-group">
-                <label>Extra Instructions (Optional)</label>
-                <textarea
-                  value={extraCommands}
-                  onChange={e => setExtraCommands(e.target.value)}
-                  placeholder="Add specific instructions, focus areas, or special requirements..."
-                  rows={3}
-                />
-                <small>Examples: "Focus on real-world applications", "Include diagrams", "Use specific formulas"</small>
-              </div>
-            </div>
-
-            <div className="form-section">
-              <h3>PDF Options</h3>
-              <div className="checkbox-group">
-                <label className="checkbox-label">
-                  <input 
-                    type="checkbox" 
-                    checked={includeAnswers} 
-                    onChange={e => setIncludeAnswers(e.target.checked)}
-                  />
-                  Include Answers in PDF
-                </label>
-                <label className="checkbox-label">
-                  <input 
-                    type="checkbox" 
-                    checked={includeExplanations} 
-                    onChange={e => setIncludeExplanations(e.target.checked)}
-                  />
-                  Include Explanations in PDF
-                </label>
-              </div>
-            </div>
 
                 <div className="action-buttons">
                   <button 
@@ -402,17 +513,17 @@ const Dashboard: React.FC = () => {
                   </button>
                   <button 
                     className="btn secondary" 
-                    onClick={handleGeneratePDF}
-                    disabled={loading}
+                    onClick={handleDownloadPDF}
+                    disabled={loading || !questionResult}
                   >
-                    Generate & Download PDF
+                    Download PDF
                   </button>
                   <button 
                     className="btn secondary" 
                     onClick={handleGenerateAnswerKey}
-                    disabled={loading}
+                    disabled={loading || !questionResult}
                   >
-                    Generate Answer Key
+                    Download Answer Key
                   </button>
                   <button 
                     className="btn secondary" 
@@ -431,8 +542,8 @@ const Dashboard: React.FC = () => {
                   <h3>Basic Settings</h3>
                   <div className="form-grid">
                     <div className="form-group">
-                      <label>Subject</label>
-                      <select value={subject} onChange={e => setSubject(e.target.value)}>
+                      <label htmlFor="subject-mixed">Subject</label>
+                      <select id="subject-mixed" value={subject} onChange={e => setSubject(e.target.value)}>
                         {subjects.map(sub => (
                           <option key={sub} value={sub}>{sub}</option>
                         ))}
@@ -440,8 +551,8 @@ const Dashboard: React.FC = () => {
                     </div>
 
                     <div className="form-group">
-                      <label>Class Level</label>
-                      <select value={classLevel} onChange={e => setClassLevel(e.target.value)}>
+                      <label htmlFor="classLevel-mixed">Class Level</label>
+                      <select id="classLevel-mixed" value={classLevel} onChange={e => setClassLevel(e.target.value)}>
                         {classLevels.map(level => (
                           <option key={level} value={level}>{level}</option>
                         ))}
@@ -449,8 +560,9 @@ const Dashboard: React.FC = () => {
                     </div>
 
                     <div className="form-group">
-                      <label>Chapter/Topic</label>
+                      <label htmlFor="chapter-mixed">Chapter/Topic</label>
                       <input
+                        id="chapter-mixed"
                         type="text"
                         value={chapter}
                         onChange={e => setChapter(e.target.value)}
@@ -459,8 +571,8 @@ const Dashboard: React.FC = () => {
                     </div>
 
                     <div className="form-group">
-                      <label>Difficulty</label>
-                      <select value={difficulty} onChange={e => setDifficulty(e.target.value)}>
+                      <label htmlFor="difficulty-mixed">Difficulty</label>
+                      <select id="difficulty-mixed" value={difficulty} onChange={e => setDifficulty(e.target.value)}>
                         <option value="easy">Easy</option>
                         <option value="medium">Medium</option>
                         <option value="hard">Hard</option>
@@ -468,8 +580,8 @@ const Dashboard: React.FC = () => {
                     </div>
 
                     <div className="form-group">
-                      <label>AI Provider</label>
-                      <select value={provider} onChange={e => setProvider(e.target.value as any)}>
+                      <label htmlFor="provider-mixed">AI Provider</label>
+                      <select id="provider-mixed" value={provider} onChange={e => setProvider(e.target.value as 'gemini' | 'openai')}>
                         <option value="gemini">Model A</option>
                         <option value="openai">Model B</option>
                       </select>
@@ -480,8 +592,9 @@ const Dashboard: React.FC = () => {
                 <div className="form-section">
                   <h3>Advanced Options</h3>
                   <div className="form-group">
-                    <label>PDF Title (Optional)</label>
+                    <label htmlFor="title-mixed">PDF Title (Optional)</label>
                     <input
+                      id="title-mixed"
                       type="text"
                       value={title}
                       onChange={e => setTitle(e.target.value)}
@@ -490,14 +603,15 @@ const Dashboard: React.FC = () => {
                     <small>This will appear as the main title at the top of your PDF</small>
                   </div>
                   <div className="form-group">
-                    <label>Extra Instructions (Optional)</label>
+                    <label htmlFor="extraCommands-mixed">Extra Instructions (Optional)</label>
                     <textarea
+                      id="extraCommands-mixed"
                       value={extraCommands}
                       onChange={e => setExtraCommands(e.target.value)}
                       placeholder="Add specific instructions, focus areas, or special requirements..."
                       rows={3}
                     />
-                    <small>Examples: "Focus on real-world applications", "Include diagrams", "Use specific formulas"</small>
+                    <small>Examples: &quot;Focus on real-world applications&quot;, &quot;Include diagrams&quot;, &quot;Use specific formulas&quot;</small>
                   </div>
                 </div>
 
@@ -526,16 +640,6 @@ const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {pdfResult && (
-            <div className="pdf-result">
-              <h3>PDF Generated Successfully!</h3>
-              <p>Questions: {pdfResult.questions}</p>
-              <button className="btn download" onClick={() => downloadPDF(pdfResult.pdfFilename)}>
-                Download PDF
-              </button>
-            </div>
-          )}
-
           {questionResult && (
             <div className="question-result">
               <h3>Generated Questions</h3>
@@ -548,27 +652,61 @@ const Dashboard: React.FC = () => {
               <h3>A/B Test Results</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
-                  <h4>Model A</h4>
+                  <h4>Model A (Gemini)</h4>
                   <pre>{JSON.stringify(abResult.gemini, null, 2)}</pre>
-                  <label>
-                    <input type="radio" name="abChoice" value="gemini" checked={abChoice==='gemini'} onChange={() => setAbChoice('gemini')} /> Prefer Model A
-                  </label>
+                  <div style={{ marginTop: '1rem' }}>
+                    <label htmlFor="radio-gemini">
+                      <input 
+                        id="radio-gemini"
+                        type="radio" 
+                        name="abChoice" 
+                        value="gemini" 
+                        checked={abChoice === 'gemini'} 
+                        onChange={() => setAbChoice('gemini')} 
+                      /> Prefer Model A
+                    </label>
+                    <button 
+                      className="btn secondary" 
+                      onClick={() => handleDownloadABPDF('gemini')}
+                      disabled={loading}
+                      style={{ marginLeft: '1rem', fontSize: '0.8rem', padding: '0.5rem 1rem' }}
+                    >
+                      Download Model A PDF
+                    </button>
+                  </div>
                 </div>
                 <div>
-                  <h4>Model B</h4>
+                  <h4>Model B (ChatGPT)</h4>
                   <pre>{JSON.stringify(abResult.openai, null, 2)}</pre>
-                  <label>
-                    <input type="radio" name="abChoice" value="openai" checked={abChoice==='openai'} onChange={() => setAbChoice('openai')} /> Prefer Model B
-                  </label>
+                  <div style={{ marginTop: '1rem' }}>
+                    <label htmlFor="radio-openai">
+                      <input 
+                        id="radio-openai"
+                        type="radio" 
+                        name="abChoice" 
+                        value="openai" 
+                        checked={abChoice === 'openai'} 
+                        onChange={() => setAbChoice('openai')} 
+                      /> Prefer Model B
+                    </label>
+                    <button 
+                      className="btn secondary" 
+                      onClick={() => handleDownloadABPDF('openai')}
+                      disabled={loading}
+                      style={{ marginLeft: '1rem', fontSize: '0.8rem', padding: '0.5rem 1rem' }}
+                    >
+                      Download Model B PDF
+                    </button>
+                  </div>
                 </div>
               </div>
               <div style={{ marginTop: '1rem' }}>
-                <button className="btn primary" onClick={handleABFeedback}>Submit Preference</button>
+                <button className="btn primary" onClick={handleABFeedback}>Submit Preference &amp; Use Selected</button>
               </div>
             </div>
           )}
-          </div>
-        </main>
+        </div>
+      </main>
       <style>{`
         .dashboard {
           min-height: 100vh;
@@ -991,6 +1129,11 @@ const Dashboard: React.FC = () => {
         .question-result h3 {
           margin: 0 0 1rem 0;
           color: #333;
+        }
+
+        .question-result h4 {
+          margin: 0 0 0.5rem 0;
+          color: #555;
         }
 
         .question-result pre {
