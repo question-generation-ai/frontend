@@ -101,8 +101,16 @@ const Dashboard: React.FC = () => {
           syllabus: topics.find(t => t.chapter === chapter)
         }),
       });
-      setQuestionResult(res);
-      setMessage('Questions generated successfully!');
+      // If backend surfaced an AI error or returned no questions, show a popup and do not render mock data
+      const failed = !res || res?.metadata?.source === 'error' || !Array.isArray(res?.questions) || res?.questions?.length === 0;
+      if (failed) {
+        setMessage('Question generation failed. Please try again later.');
+        // Popup as requested for a more professional handling than mock data
+        window.alert('Question generation failed. Please try again later.');
+      } else {
+        setQuestionResult(res);
+        setMessage('Questions generated successfully!');
+      }
     } catch (err) {
       setMessage('Error generating questions');
     } finally {
@@ -422,8 +430,12 @@ const Dashboard: React.FC = () => {
                         <option value="short-answer">Short Answer</option>
                         <option value="true-false">True/False</option>
                         <option value="long-answer">Long Answer</option>
+                        <option value="reasoning-based">Reasoning Based</option>
                         <option value="application-based">Application Based</option>
+                        <option value="analytical">Analytical</option>
                         <option value="fill-in-the-blank">Fill in the Blank</option>
+                        <option value="case-study">Case Study</option>
+                        <option value="problem-solving">Problem Solving</option>
                       
                       </select>
                     </div>
